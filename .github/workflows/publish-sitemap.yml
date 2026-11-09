@@ -2,6 +2,8 @@ name: Publish Oaklin Lane Sitemaps
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   schedule:
     - cron: '23 11 * * *'
 
@@ -44,6 +46,7 @@ jobs:
               ("Locations", "locations", "locations"),
               ("Blog Topics", "categories", "topic"),
               ("Blog Authors", "authors", "author"),
+              ("Resources", "resources", "resources"),
           ]
 
           SERVICES = {
@@ -58,6 +61,7 @@ jobs:
               "/401",
               "/thank-you",
               "/brand/business-cards",
+              "/home-holiday",
               "/resources-2",
               "/academy-lane-registration",
           }
