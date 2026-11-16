@@ -32,8 +32,10 @@ jobs:
           cp index.html _site/index.html
           python3 - <<'PY'
           import os
+          import re
           import json
           import xml.etree.ElementTree as ET
+          from concurrent.futures import ThreadPoolExecutor
           from urllib.request import Request, urlopen
           from urllib.parse import urlencode, quote
 
@@ -90,9 +92,31 @@ jobs:
                   if not items or offset >= response["pagination"]["total"]:
                       break
 
+          # A page marked noindex (e.g. the /welcome thank-you page) must not be
+          # in a sitemap, or Search Console flags the conflict. Check the live page.
+          ROBOTS_META = re.compile(r'<meta[^>]+name=["\']?(?:robots|googlebot)["\']?[^>]*>', re.I)
+
+          def is_noindex(url):
+              try:
+                  request = Request(url, headers={"User-Agent": "oaklinlane-sitemap-builder"})
+                  with urlopen(request, timeout=30) as response:
+                      if "noindex" in (response.headers.get("X-Robots-Tag") or "").lower():
+                          return True
+                      html = response.read().decode("utf-8", "replace")
+              except Exception as error:
+                  print(f"warning: could not check {url}: {error}")
+                  return False
+              return any("noindex" in tag.lower() for tag in ROBOTS_META.findall(html))
+
           def write_sitemap(filename, urls):
               root = ET.Element(f"{{{NS}}}urlset")
               unique_urls = sorted(set(urls))
+              with ThreadPoolExecutor(max_workers=8) as pool:
+                  noindex = list(pool.map(is_noindex, unique_urls))
+              for url, skip in zip(unique_urls, noindex):
+                  if skip:
+                      print(f"{filename}: skipping noindex page {url}")
+              unique_urls = [url for url, skip in zip(unique_urls, noindex) if not skip]
               for url in unique_urls:
                   entry = ET.SubElement(root, f"{{{NS}}}url")
                   ET.SubElement(entry, f"{{{NS}}}loc").text = url
